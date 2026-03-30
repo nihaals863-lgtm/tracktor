@@ -1,0 +1,121 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  name         String
+  email        String    @unique
+  phone        String?
+  passwordHash String    @map("password_hash")
+  role         String    @default("farmer") // farmer | admin | operator
+  status       String    @default("active") // active | inactive (ONLY for authentication)
+  availability String    @default("available") // available | busy (ONLY for operator dispatch)
+  language     String    @default("en")
+  location     String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  bookings     Booking[] @relation("FarmerBookings")
+  tractors     Tractor[] @relation("OperatorTractors")
+  operatorBookings Booking[] @relation("OperatorBookings")
+  fuelLogs         FuelLog[] @relation("OperatorFuelLogs")
+
+  @@map("users")
+}
+
+model Service {
+  id                 Int       @id @default(autoincrement())
+  name               String    @unique // plough, harrow, ridge, full
+  baseRatePerHectare Float     @map("base_rate_per_hectare")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  bookings           Booking[]
+
+  @@map("services")
+}
+
+model Booking {
+  id             Int      @id @default(autoincrement())
+  farmerId       Int      @map("farmer_id")
+  serviceId      Int      @map("service_id")
+  landSize       Float    @map("land_size")
+  location       String
+  
+  // Pricing Fields
+  basePrice      Float    @map("base_price")
+  distanceKm     Float    @default(0) @map("distance_km")
+  distanceCharge Float    @default(0) @map("distance_charge")
+  fuelSurcharge  Float    @default(0) @map("fuel_surcharge")
+  totalPrice     Float    @map("total_price")
+  finalPrice     Float    @map("final_price")
+  
+  // Assignment
+  tractorId      Int?     @map("tractor_id")
+  operatorId     Int?     @map("operator_id")
+  
+  // Status
+  status         String   @default("scheduled") // scheduled, dispatched, en_route, in_progress, completed, paid, cancelled
+  
+  payments       Payment[]
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  farmer         User     @relation("FarmerBookings", fields: [farmerId], references: [id])
+  service        Service  @relation(fields: [serviceId], references: [id])
+  operator       User?    @relation("OperatorBookings", fields: [operatorId], references: [id])
+  tractor        Tractor? @relation("TractorBookings", fields: [tractorId], references: [id])
+
+  @@map("bookings")
+}
+
+model Payment {
+  id            Int      @id @default(autoincrement())
+  bookingId     Int      @map("booking_id")
+  amount        Float
+  method        String   @default("cash") // cash, mobile_money, bank_transfer, admin_settlement
+  reference     String?
+  status        String   @default("full") // pending, partial, full
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  booking       Booking  @relation(fields: [bookingId], references: [id])
+
+  @@map("payments")
+}
+
+model Tractor {
+  id          Int      @id @default(autoincrement())
+  modelName   String   @map("model_name")
+  plateNumber String   @unique @map("plate_number")
+  status      String   @default("available") // available | busy | maintenance
+  operatorId  Int      @map("operator_id")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  operator    User     @relation("OperatorTractors", fields: [operatorId], references: [id])
+  bookings    Booking[] @relation("TractorBookings")
+
+  @@map("tractors")
+}
+
+model FuelLog {
+  id          Int      @id @default(autoincrement())
+  operatorId  Int      @map("operator_id")
+  tractorId   Int?     @map("tractor_id")
+  liters      Float
+  cost        Float
+  station     String
+  receiptUrl  String?  @map("receipt_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  operator    User     @relation("OperatorFuelLogs", fields: [operatorId], references: [id])
+
+  @@map("fuel_logs")
+}
