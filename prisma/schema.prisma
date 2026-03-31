@@ -24,6 +24,7 @@ model User {
   tractors     Tractor[] @relation("OperatorTractors")
   operatorBookings Booking[] @relation("OperatorBookings")
   fuelLogs         FuelLog[] @relation("OperatorFuelLogs")
+  operatorLocation OperatorLocation?
 
   @@map("users")
 }
@@ -118,4 +119,28 @@ model FuelLog {
   operator    User     @relation("OperatorFuelLogs", fields: [operatorId], references: [id])
 
   @@map("fuel_logs")
+}
+
+model OperatorLocation {
+  id           Int      @id @default(autoincrement())
+  operatorId   Int      @unique @map("operator_id")
+  name         String   
+  status       String   @default("AVAILABLE") // AVAILABLE, BUSY, MAINTENANCE
+  currentLat   Float    @map("current_lat")
+  currentLng   Float    @map("current_lng")
+  lastUpdated  DateTime @default(now()) @updatedAt @map("last_updated")
+
+  user         User     @relation(fields: [operatorId], references: [id])
+
+  @@map("operator_locations")
+}
+
+model TrackingLog {
+  id           Int      @id @default(autoincrement())
+  operatorId   Int      @map("operator_id")
+  lat          Float
+  lng          Float
+  timestamp    DateTime @default(now())
+
+  @@map("tracking_logs")
 }

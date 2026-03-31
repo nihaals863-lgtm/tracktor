@@ -392,7 +392,7 @@ export const getAllFarmers = async () => {
  * Create a new farmer with a temporary password.
  */
 export const createFarmer = async (data) => {
-  const { name, email, phone, location } = data;
+  const { name, email, phone, location, password } = data;
 
   // 1. Check if email already exists
   const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -400,9 +400,9 @@ export const createFarmer = async (data) => {
     throw new Error('User with this email already exists');
   }
 
-  // 2. Generate temporary password
-  const tempPassword = Math.random().toString(36).slice(-8);
-  const passwordHash = await bcrypt.hash(tempPassword, 10);
+  // 2. Use provided password or generate temporary one
+  const finalPassword = password || Math.random().toString(36).slice(-8);
+  const passwordHash = await bcrypt.hash(finalPassword, 10);
 
   // 3. Create user
   const user = await prisma.user.create({
@@ -424,7 +424,7 @@ export const createFarmer = async (data) => {
       name: user.name,
       email: user.email
     },
-    tempPassword
+    tempPassword: finalPassword
   };
 };
 

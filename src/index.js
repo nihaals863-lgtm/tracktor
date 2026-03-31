@@ -1,12 +1,16 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import authRoutes from './routes/auth.routes.js';
 import farmerRoutes from './routes/farmer.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import operatorRoutes from './routes/operator.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
+import trackingRoutes from './routes/tracking.routes.js';
 import { sendError } from './utils/response.js';
+import { initSocket } from './services/socket.service.js';
 
 dotenv.config();
 
@@ -22,6 +26,7 @@ app.use('/api/farmer', farmerRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/operator', operatorRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/tracking', trackingRoutes);
 
 // Root Route
 app.get('/', (req, res) => {
@@ -39,8 +44,13 @@ app.use((err, req, res, next) => {
   return sendError(res, err.message || "Internal Server Error", err.status || 500);
 });
 
+const httpServer = createServer(app);
+const io = initSocket(httpServer);
+
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT} with Socket.io enabled`);
 });
+
+export { io };
