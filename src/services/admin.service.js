@@ -1,4 +1,3 @@
-import bcrypt from 'bcryptjs';
 import prisma from '../config/db.js';
 
 export const getPendingBookings = async () => {
@@ -386,46 +385,6 @@ export const getAllFarmers = async () => {
     status: f.status,
     createdAt: f.createdAt
   }));
-};
-
-/**
- * Create a new farmer with a temporary password.
- */
-export const createFarmer = async (data) => {
-  const { name, email, phone, location } = data;
-
-  // 1. Check if email already exists
-  const existingUser = await prisma.user.findUnique({ where: { email } });
-  if (existingUser) {
-    throw new Error('User with this email already exists');
-  }
-
-  // 2. Generate temporary password
-  const tempPassword = Math.random().toString(36).slice(-8);
-  const passwordHash = await bcrypt.hash(tempPassword, 10);
-
-  // 3. Create user
-  const user = await prisma.user.create({
-    data: {
-      name,
-      email,
-      phone,
-      location,
-      passwordHash,
-      role: 'farmer',
-      status: 'active'
-    }
-  });
-
-  return {
-    success: true,
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email
-    },
-    tempPassword
-  };
 };
 
 /**

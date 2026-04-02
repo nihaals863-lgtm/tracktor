@@ -5,7 +5,9 @@ export const bookingCreateSchema = z.object({
     errorMap: () => ({ message: "Service type must be one of: plough, harrow, ridge, full" })
   }),
   landSize: z.number().positive("Land size must be a positive number"),
-  location: z.string().min(3, "Location must be at least 3 characters long")
+  location: z.string().min(3, "Location must be at least 3 characters long"),
+  zoneId: z.number().int().positive().optional().nullable()
 });
 
 export const pricePreviewSchema = bookingCreateSchema;
+

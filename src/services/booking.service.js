@@ -1,10 +1,16 @@
 import prisma from '../config/db.js';
 
 /**
- * Calculate booking price based on service rate and land size.
- * Future-ready structure included.
+ * Calculate booking price based on service rate, land size, and zone distance.
+ * 
+ * Formula:
+ *   serviceCost    = landSize * ratePerHectare
+ *   fuelCostPerKm  = dieselPrice / avgMileage
+ *   distanceCharge = zone.distance * fuelCostPerKm
+ *   totalPrice     = serviceCost + distanceCharge
  */
-export const calculateBookingPrice = async (serviceType, landSize) => {
+export const calculateBookingPrice = async (serviceType, landSize, zoneId = null) => {
+  // 1. Get service rate
   const service = await prisma.service.findUnique({
     where: { name: serviceType.toLowerCase() }
   });
@@ -16,11 +22,36 @@ export const calculateBookingPrice = async (serviceType, landSize) => {
   const baseRate = service.baseRatePerHectare;
   const basePrice = baseRate * landSize;
 
-  // Future-ready defaults
-  const distanceKm = 0;
-  const distanceCharge = 0;
-  const fuelSurcharge = 0;
-  const totalPrice = basePrice + distanceCharge + fuelSurcharge;
+  // 2. Get fuel config (safe defaults if not configured)
+  let dieselPrice = 0;
+  let avgMileage = 1;
+  try {
+    const config = await prisma.systemConfig.findUnique({ where: { id: 1 } });
+    if (config) {
+      dieselPrice = config.dieselPrice || 0;
+      avgMileage = config.avgMileage > 0 ? config.avgMileage : 1;
+    }
+  } catch (e) {
+    console.warn('[BookingService] Could not fetch SystemConfig, using defaults:', e.message);
+  }
+
+  const fuelCostPerKm = dieselPrice / avgMileage;
+
+  // 3. Get zone distance (0 if no zone selected — backward compatible)
+  let distanceKm = 0;
+  let zoneName = null;
+  if (zoneId) {
+    const zone = await prisma.zone.findUnique({ where: { id: parseInt(zoneId) } });
+    if (zone) {
+      distanceKm = zone.distance;
+      zoneName = zone.name;
+    }
+  }
+
+  // 4. Calculate charges
+  const distanceCharge = parseFloat((distanceKm * fuelCostPerKm).toFixed(2));
+  const fuelSurcharge = 0; // kept for schema compatibility
+  const totalPrice = parseFloat((basePrice + distanceCharge).toFixed(2));
   const finalPrice = totalPrice;
 
   return {
@@ -30,7 +61,8 @@ export const calculateBookingPrice = async (serviceType, landSize) => {
     distanceCharge,
     fuelSurcharge,
     totalPrice,
-    finalPrice
+    finalPrice,
+    zoneName
   };
 };
 
@@ -38,9 +70,9 @@ export const calculateBookingPrice = async (serviceType, landSize) => {
  * Create a new booking for a farmer.
  */
 export const createBookingRequest = async (farmerId, bookingData) => {
-  const { serviceType, landSize, location } = bookingData;
+  const { serviceType, landSize, location, zoneId } = bookingData;
 
-  const pricing = await calculateBookingPrice(serviceType, landSize);
+  const pricing = await calculateBookingPrice(serviceType, landSize, zoneId);
 
   const booking = await prisma.booking.create({
     data: {
@@ -54,6 +86,7 @@ export const createBookingRequest = async (farmerId, bookingData) => {
       fuelSurcharge: pricing.fuelSurcharge,
       totalPrice: pricing.totalPrice,
       finalPrice: pricing.finalPrice,
+      zoneName: pricing.zoneName,
       status: 'scheduled'
     },
     include: {
@@ -130,3 +163,4 @@ export const getBookingById = async (bookingId, farmerId) => {
 
   return booking;
 };
+

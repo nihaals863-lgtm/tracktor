@@ -3,6 +3,7 @@ import * as dispatchController from '../controllers/admin/dispatch.controller.js
 import * as adminController from '../controllers/admin/admin.controller.js';
 import * as dashboardController from '../controllers/admin/dashboard.controller.js';
 import * as reportController from '../controllers/admin/report.controller.js';
+import * as settingsController from '../controllers/admin/settings.controller.js';
 import { verifyToken, requireRole } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
@@ -29,7 +30,6 @@ router.put('/assign/:bookingId', dispatchController.dispatchBooking);
 
 // Farmers Management
 router.get('/farmers', adminController.getFarmers);
-router.post('/farmers', adminController.addFarmer);
 router.put('/farmers/:id/status', adminController.updateFarmerStatus);
 
 // Reports & Analytics
@@ -38,4 +38,15 @@ router.get('/reports/service-usage', reportController.getServiceUsage);
 router.get('/reports/fleet', reportController.getFleet);
 router.get('/reports/farmers', reportController.getFarmers);
 
+// System Settings - Global Configuration
+router.get('/settings/config', settingsController.getSystemConfig);
+router.post('/settings/config', settingsController.updateSystemConfig);
+
+// System Settings - Distance Zones
+router.get('/settings/zones', settingsController.listZones);
+router.post('/settings/zones', settingsController.createZone);
+router.put('/settings/zones/:id', settingsController.updateZone);
+router.delete('/settings/zones/:id', settingsController.deleteZone);
+
 export default router;
+

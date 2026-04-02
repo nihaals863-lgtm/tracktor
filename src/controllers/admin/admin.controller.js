@@ -1,6 +1,6 @@
 import * as adminService from '../../services/admin.service.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
-import { addFarmerSchema, updateFarmerStatusSchema } from '../../schema/farmer.schema.js';
+import { updateFarmerStatusSchema } from '../../schema/farmer.schema.js';
 
 /**
  * Get bookings for admin dashboard with pagination and filters.
@@ -68,23 +68,6 @@ export const getFarmers = async (req, res) => {
     return sendSuccess(res, farmers, "Farmers retrieved successfully");
   } catch (error) {
     return sendError(res, error.message, 500);
-  }
-};
-
-/**
- * Add a new farmer (Admin action).
- */
-export const addFarmer = async (req, res) => {
-  try {
-    const validatedData = addFarmerSchema.parse(req.body);
-    const result = await adminService.createFarmer(validatedData);
-    return sendSuccess(res, result, "Farmer created successfully");
-  } catch (error) {
-    if (error.name === 'ZodError') {
-      return sendError(res, error.errors[0].message, 400);
-    }
-    const statusCode = error.message.includes('already exists') ? 409 : 500;
-    return sendError(res, error.message, statusCode);
   }
 };
 

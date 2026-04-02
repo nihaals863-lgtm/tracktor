@@ -10,14 +10,16 @@ export const getPricePreview = async (req, res) => {
     const validatedData = bookingCreateSchema.parse(req.body);
     const pricing = await BookingService.calculateBookingPrice(
       validatedData.serviceType,
-      validatedData.landSize
+      validatedData.landSize,
+      validatedData.zoneId
     );
     return sendSuccess(res, {
       basePrice: pricing.basePrice,
       distanceKm: pricing.distanceKm,
       distanceCharge: pricing.distanceCharge,
       fuelSurcharge: pricing.fuelSurcharge,
-      totalPrice: pricing.totalPrice
+      totalPrice: pricing.totalPrice,
+      zoneName: pricing.zoneName
     }, "Price preview calculated");
   } catch (error) {
     if (error.name === 'ZodError') {
