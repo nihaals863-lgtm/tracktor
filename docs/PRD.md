@@ -36,6 +36,7 @@ The system operates on a **centralized fleet model**, where all tractors and ope
 - Assign tractors and operators  
 - Monitor fleet availability  
 - Configure pricing rules (service rates, distance, fuel)  
+- **Operator Management**: Direct enrollment and decommissioning of operator accounts.
 - View system reports  
 
 ---
@@ -44,6 +45,7 @@ The system operates on a **centralized fleet model**, where all tractors and ope
 - View assigned jobs  
 - Navigate to job location  
 - Update job status  
+- **Profile Management**: Update personal contact details (Name, Email, Phone).
 - Execute assigned work  
 - Log fuel consumption and expenses
 
@@ -57,7 +59,9 @@ The system operates on a **centralized fleet model**, where all tractors and ope
   - Land size (hectares)  
   - Location  
 - System generates estimated price  
+- **Rich Quote View (New)**: Detailed modal showing route flow from Hub to Farmer with clear price itemization.
 - Booking is created with status: **Scheduled**
+- System snapshots current hub/service metadata at creation.
 
 ---
 
@@ -115,6 +119,13 @@ The system operates on a **centralized fleet model**, where all tractors and ope
 
 ---
 
+### 4.8 User Enrollment & Access Control
+- **Farmer Registration**: Self-service signup via the public portal. Restricted to `farmer` role.
+- **Internal Accounts**: Admins and Operators must be enrolled manually by an existing administrator.
+- **Profile Independence**: Operators and Farmers can manage their own profile details and platform interface language.
+
+---
+
 ## 5. Business Logic (Core System Rules)
 
 ### 5.1 Booking Logic
@@ -132,10 +143,13 @@ Total price is calculated using:
 
 Total Price = (Base Rate × Land Size) + Distance Surcharge + Fuel Adjustment
 
+- **Historical Integrity**: Rates and Hub locations are captured at booking time to ensure the "Quote" remains consistent for the farmer even if global rates change later.
+
 
 #### Base Rate
 - Defined per service (e.g., plough, harrow)  
-- Calculated per hectare  
+- Calculated per hectare
+- **Effective Rate Management**: Admins can update rates with an `effectiveDate` (supports historical corrections and future updates).
 
 #### Distance Surcharge
 - First 5 km: No charge  

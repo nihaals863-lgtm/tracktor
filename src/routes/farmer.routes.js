@@ -10,18 +10,12 @@ import { verifyToken, requireRole } from '../middleware/auth.middleware.js';
 const router = express.Router();
 
 router.use(verifyToken);
-router.use(requireRole(['farmer']));
 
-// Dashboard routes
-router.get('/dashboard', dashboardController.getDashboard);
-router.get('/recent-activity', dashboardController.getRecentActivity);
-router.get('/upcoming-jobs', dashboardController.getUpcomingJobs);
+// --- Shared Public/Metadata Routes (Accessible by All Roles) ---
 
-// Service routes
-router.get('/services', serviceController.listServices);
+router.get('/services', requireRole(['farmer', 'operator', 'admin']), serviceController.listServices);
 
-// Configuration routes
-router.get('/settings/config', async (req, res) => {
+router.get('/settings/config', requireRole(['farmer', 'operator', 'admin']), async (req, res) => {
   try {
     const config = await settingsService.getSystemConfig();
     return sendSuccess(res, config, "Configuration retrieved");
@@ -30,8 +24,7 @@ router.get('/settings/config', async (req, res) => {
   }
 });
 
-// Zones route (for booking dropdown)
-router.get('/zones', async (req, res) => {
+router.get('/zones', requireRole(['farmer', 'operator', 'admin']), async (req, res) => {
   try {
     const zones = await settingsService.listZones();
     return sendSuccess(res, zones, "Zones retrieved");
@@ -39,6 +32,15 @@ router.get('/zones', async (req, res) => {
     return sendError(res, error.message, 500);
   }
 });
+
+// --- Private Farmer Routes (Restricted to Farmer Role Only) ---
+
+router.use(requireRole(['farmer']));
+
+// Dashboard routes
+router.get('/dashboard', dashboardController.getDashboard);
+router.get('/recent-activity', dashboardController.getRecentActivity);
+router.get('/upcoming-jobs', dashboardController.getUpcomingJobs);
 
 // Booking routes
 router.post('/price-preview', bookingController.getPricePreview);

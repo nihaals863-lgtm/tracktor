@@ -21,6 +21,7 @@ router.get('/fuel/summary', fuelController.getFuelSummary);
 
 // Profile routes
 router.get('/profile', profileController.getProfile);
+router.patch('/profile', profileController.updateProfile);
 router.patch('/change-password', profileController.changePassword);
 router.patch('/language', profileController.updateLanguage);
 

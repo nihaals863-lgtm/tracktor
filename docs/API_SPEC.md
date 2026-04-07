@@ -7,7 +7,7 @@ This document defines all RESTful API endpoints for the TractorLink backend.
 ## 1. Authentication APIs
 
 ### POST /api/auth/register
-- Description: Register a new user (Farmer or Operator)
+- Description: Register a new user (**Farmer Only**)
 - Body:
 {
   "name": "John Doe",
@@ -42,11 +42,14 @@ This document defines all RESTful API endpoints for the TractorLink backend.
 {
   "serviceType": "plough",
   "landSize": 5.5,
-  "location": "Village A"
+  "location": "Village A",
+  "paymentOption": "full" | "partial" | "later"
 }
 - Logic:
   - Pricing calculated automatically
-  - Booking status = Scheduled
+  - Payment record created immediately if "full" or "partial" is selected
+  - Booking status = Pending
+  - Payment status = PAID (if full), PARTIAL (if partial), PENDING (if later)
 
 ---
 
@@ -56,7 +59,7 @@ This document defines all RESTful API endpoints for the TractorLink backend.
 ---
 
 ### GET /api/farmer/bookings/:id
-- Description: Get single booking details
+- Description: Get single booking details (includes hub and service snapshots for the Quote view).
 
 ---
 
@@ -78,15 +81,24 @@ This document defines all RESTful API endpoints for the TractorLink backend.
 
 ## 3. Admin APIs (Protected: Role = admin)
 
-### GET /api/admin/bookings
 - Description: Get all bookings (global registry)
-- Response includes: farmer and service details.
+- Response includes: farmer, service, and payment details (for balance calculation).
 
 ---
 
 ### GET /api/admin/pending-dispatch
-- Description: Get only bookings with status `scheduled`.
-- Used for: Dispatch Queue.
+- Description: Get bookings that require scheduling (`pending`) or assignment (`scheduled`).
+- Used for: Dispatch Hub Queue.
+
+---
+
+### PUT /api/admin/schedule/:bookingId
+- Description: Schedule a pending booking by setting a deployment datetime.
+- Body: `{ "scheduledDate": "2026-04-10T10:00:00Z" }`
+- Logic:
+  - Transition allowed from `pending`.
+  - Sets `scheduledAt` field.
+  - Updates booking status to `scheduled`.
 
 ---
 
@@ -119,7 +131,13 @@ This document defines all RESTful API endpoints for the TractorLink backend.
 - Logic:
   - Calculates remaining balance.
   - Creates a Payment record (`method: admin_settlement`).
-  - Status → `paid`.
+  - Updates booking `status` to `paid` and `paymentStatus` to `PAID`.
+
+| **Payment Statuses** | **Context** |
+| :--- | :--- |
+| **PENDING** | Initial state (Payment Option: Later) |
+| **PARTIAL** | 50% Advance paid (Payment Option: Partial) |
+| **PAID** | 100% Settle (Payment Option: Full or Admin Settled) |
 
 ---
 
@@ -148,9 +166,69 @@ This document defines all RESTful API endpoints for the TractorLink backend.
 
 ---
 
-### PUT /api/admin/farmers/:id/status
-- Description: Activate or deactivate a farmer account.
-- Body: `{ status: "active" | "inactive" }`
+### GET /api/admin/services
+- Description: Get all service types with current rates and effective dates.
+- Response: `[{ id, name, baseRatePerHectare, effectiveDate }]`
+
+---
+
+### PUT /api/admin/services/:id
+- Description: Update service base rate and effective date.
+- Body: `{ baseRatePerHectare, effectiveDate }`
+- Logic: Validates input and triggers a rate change. 
+- Constraint: `effectiveDate` can be past, present, or future.
+
+---
+
+---
+
+---
+
+### GET /api/admin/operator-list
+- Description: Get all operators with their account details.
+- Used for: Operator Management Table.
+- Response: `[{ id, name, email, phone, status, role }]`
+
+---
+
+### POST /api/admin/operators
+- Description: Enroll a new operator with a default password.
+- Body: `{ name, email, password, phone }`
+- Logic:
+  - Hashes password.
+  - Creates user with `role: operator`.
+  - Sets `status: active`.
+
+---
+
+### DELETE /api/admin/operators/:id
+- Description: Decommission an operator account.
+- Logic:
+  - Deletes user record (Safe delete recommended in production).
+
+---
+
+### GET /api/admin/tractors
+- Description: Get all tractors in the fleet.
+- Response: `[{ id, name, model, status, operatorId, operator: { name } }]`
+
+---
+
+### POST /api/admin/tractors
+- Description: Add a new tractor to the fleet.
+- Body: `{ name, model }`
+- Logic:
+  - Initial status: `available`.
+
+---
+
+### PUT /api/admin/tractors/:id
+- Description: Update tractor details or assign operator.
+- Body: `{ name, model, status, operatorId }`
+- Logic:
+  - Validates operator role.
+  - Enforces 1-to-1 mapping (unassigns previous operator if necessary).
+  - Blocks assignment if status is `maintenance`.
 
 ---
 
@@ -161,6 +239,33 @@ This document defines all RESTful API endpoints for the TractorLink backend.
 ### GET /api/operator/jobs
 - Description: Get jobs assigned to the logged-in operator.
 - Includes: Farmer name, service metrics, and location.
+
+---
+
+### GET /api/operator/profile
+- Description: Get logged-in operator profile details.
+- Response: `{ name, email, phone, role, language, tractor }`
+
+---
+
+### PATCH /api/operator/profile
+- Description: Update operator profile information.
+- Body: `{ name, email, phone }`
+- Logic:
+  - Validates email uniqueness.
+  - Updates name and phone.
+
+---
+
+### PATCH /api/operator/change-password
+- Description: Update account password.
+- Body: `{ oldPassword, newPassword }`
+
+---
+
+### PATCH /api/operator/language
+- Description: Update interface language preference.
+- Body: `{ language: "en" | "naira" }`
 
 ---
 

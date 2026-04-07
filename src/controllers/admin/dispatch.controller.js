@@ -40,3 +40,21 @@ export const dispatchBooking = async (req, res) => {
     return sendError(res, error.message, statusCode, errorCode);
   }
 };
+
+export const scheduleBooking = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    const { scheduledDate } = req.body;
+
+    if (!scheduledDate) {
+      return sendError(res, "scheduledDate is required", 400, "VALIDATION_ERROR");
+    }
+
+    const booking = await adminService.scheduleBooking(bookingId, scheduledDate);
+    return sendSuccess(res, booking, "Booking scheduled successfully");
+  } catch (error) {
+    const statusCode = error.message.includes('NOT_FOUND') || error.message.includes('not found') ? 404 : 400;
+    const errorCode = error.message.includes('INVALID_TRANSITION') ? 'INVALID_TRANSITION' : 'SCHEDULE_ERROR';
+    return sendError(res, error.message, statusCode, errorCode);
+  }
+};

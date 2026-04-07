@@ -23,6 +23,7 @@ export const getProfile = async (req, res) => {
       data: {
         name: operator.name,
         email: operator.email,
+        phone: operator.phone || '',
         role: operator.role,
         language: operator.language,
         tractor: operator.tractors.length > 0 ? operator.tractors[0].modelName : 'Unassigned'
@@ -57,6 +58,36 @@ export const changePassword = async (req, res) => {
 
     res.json({ success: true, message: 'Password updated successfully' });
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const updateProfile = async (req, res) => {
+  try {
+    const { name, email, phone } = req.body;
+    
+    if (!name || !email) {
+      return res.status(400).json({ success: false, message: 'Name and email are required' });
+    }
+
+    const updatedOperator = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { name, email, phone }
+    });
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        name: updatedOperator.name,
+        email: updatedOperator.email,
+        phone: updatedOperator.phone
+      }
+    });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ success: false, message: 'Email already in use' });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };

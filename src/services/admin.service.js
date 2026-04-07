@@ -1,13 +1,33 @@
+import bcrypt from 'bcryptjs';
 import prisma from '../config/db.js';
 
 export const getPendingBookings = async () => {
   return await prisma.booking.findMany({
-    where: { status: 'scheduled' },
+    where: { status: { in: ['pending', 'scheduled'] } },
     include: {
       farmer: { select: { name: true, phone: true } },
       service: { select: { name: true } },
     },
     orderBy: { createdAt: 'asc' },
+  });
+};
+
+export const scheduleBooking = async (bookingId, scheduledDate) => {
+  const booking = await prisma.booking.findUnique({
+    where: { id: parseInt(bookingId) },
+  });
+
+  if (!booking) throw new Error('Booking not found');
+  if (booking.status !== 'pending' && booking.status !== 'scheduled') {
+    throw new Error('INVALID_TRANSITION: Booking can only be scheduled from pending or scheduled state');
+  }
+
+  return await prisma.booking.update({
+    where: { id: booking.id },
+    data: {
+      status: 'scheduled',
+      scheduledAt: new Date(scheduledDate)
+    }
   });
 };
 
@@ -18,8 +38,10 @@ export const getAvailableOperators = async () => {
       role: 'operator',
       status: 'active',             // must have active account
       availability: 'available',    // must be free to take a job
-      tractors: {
-        some: { status: 'available' }
+      tractor: {
+        is: {
+          status: 'AVAILABLE'
+        }
       }
     },
     select: {
@@ -28,9 +50,8 @@ export const getAvailableOperators = async () => {
       email: true,
       phone: true,
       availability: true,
-      tractors: {
-        where: { status: 'available' },
-        select: { id: true, modelName: true, plateNumber: true }
+      tractor: {
+        select: { id: true, name: true, model: true }
       }
     }
   });
@@ -48,7 +69,7 @@ export const assignOperator = async (bookingId, operatorId) => {
   // 2. Validate operator exists
   const operator = await prisma.user.findUnique({
     where: { id: parseInt(operatorId) },
-    include: { tractors: true }
+    include: { tractor: true }
   });
 
   if (!operator || operator.role !== 'operator') {
@@ -59,7 +80,7 @@ export const assignOperator = async (bookingId, operatorId) => {
   const tractor = await prisma.tractor.findFirst({
     where: {
       operatorId: operator.id,
-      status: 'available'
+      status: 'AVAILABLE'
     }
   });
 
@@ -83,7 +104,7 @@ export const assignOperator = async (bookingId, operatorId) => {
     }),
     prisma.tractor.update({
       where: { id: tractor.id },
-      data: { status: 'busy' },
+      data: { status: 'IN_USE' },
     })
   ]);
 
@@ -126,6 +147,7 @@ export const getAllBookings = async (query = {}) => {
       include: {
         farmer: { select: { id: true, name: true, email: true } },
         service: { select: { name: true } },
+        payments: true
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -173,7 +195,7 @@ export const getBookingById = async (id) => {
     }) : Promise.resolve(null),
     booking.tractorId ? prisma.tractor.findUnique({
       where: { id: booking.tractorId },
-      select: { id: true, modelName: true, plateNumber: true }
+      select: { id: true, name: true, model: true }
     }) : Promise.resolve(null),
     prisma.payment.findMany({
       where: { bookingId: bId }
@@ -235,20 +257,30 @@ export const getAllPayments = async (query = {}) => {
         booking: {
           include: {
             farmer: { select: { id: true, name: true, email: true } },
-            service: { select: { name: true } }
+            service: { select: { name: true } },
+            payments: { select: { amount: true } }
           }
         }
       },
       orderBy: { createdAt: 'desc' }
     });
 
-    combinedLedger.push(...payments.map(p => ({
-      ...p,
-      type: 'payment',
-      amount: p.amount,
-      createdAt: p.createdAt,
-      booking: p.booking
-    })));
+    combinedLedger.push(...payments.map(p => {
+      const paidAmt = p.booking?.payments?.reduce((s, pay) => s + pay.amount, 0) || p.amount;
+      const totalAmt = p.booking?.finalPrice || p.booking?.totalPrice || 0;
+      return {
+        ...p,
+        type: 'payment',
+        amount: p.amount,
+        createdAt: p.createdAt,
+        totalAmount: totalAmt,
+        paidAmount: paidAmt,
+        remainingAmount: Math.max(0, totalAmt - paidAmt),
+        paymentStatus: p.booking?.paymentStatus || 'PAID',
+        method: p.method,
+        booking: p.booking
+      };
+    }));
   }
 
   if (status === 'all' || status === 'pending') {
@@ -262,10 +294,10 @@ export const getAllPayments = async (query = {}) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Filter only those with outstanding balance
     const dues = bookings.map(b => {
       const paidAmount = b.payments.reduce((sum, p) => sum + p.amount, 0);
-      const balance = b.totalPrice - paidAmount;
+      const totalAmt = b.finalPrice || b.totalPrice || 0;
+      const balance = totalAmt - paidAmount;
       if (balance <= 0) return null;
 
       return {
@@ -274,6 +306,11 @@ export const getAllPayments = async (query = {}) => {
         amount: balance,
         type: 'due',
         createdAt: b.createdAt,
+        totalAmount: totalAmt,
+        paidAmount: paidAmount,
+        remainingAmount: balance,
+        paymentStatus: b.paymentStatus || 'PENDING',
+        method: 'none',
         booking: b
       };
     }).filter(Boolean);
@@ -314,7 +351,7 @@ export const getAllPayments = async (query = {}) => {
  * Handle Admin Settlement (Phase 1)
  * Creates a payment and marks booking as paid in a transaction.
  */
-export const settleBooking = async (bookingId) => {
+export const settleBooking = async (bookingId, method = 'cash') => {
   const bId = parseInt(bookingId);
   console.log(`[AdminService] Attempting settlement for booking #${bId}`);
 
@@ -342,7 +379,7 @@ export const settleBooking = async (bookingId) => {
       data: {
         bookingId: bId,
         amount: remaining,
-        method: 'admin_settlement',
+        method: method,
         reference: 'manual',
         status: 'full'
       }
@@ -351,7 +388,7 @@ export const settleBooking = async (bookingId) => {
     // 4. Update booking status
     const updatedBooking = await tx.booking.update({
       where: { id: bId },
-      data: { status: 'paid' }
+      data: { status: 'paid', paymentStatus: 'PAID' }
     });
 
     return {
@@ -419,7 +456,7 @@ export const getDashboardMetrics = async () => {
       where: { status: 'scheduled' }
     }),
     prisma.tractor.count({
-      where: { status: 'available' }
+      where: { status: 'AVAILABLE' }
     }),
     prisma.payment.aggregate({
       _sum: { amount: true }
@@ -523,7 +560,164 @@ export const getDashboardFleet = async () => {
 
   return tractors.map(t => ({
     operator_name: t.operator?.name || 'No Operator',
-    tractor_model: t.modelName,
-    status: t.status // available | busy | maintenance
+    tractor_model: t.name,
+    status: t.status // AVAILABLE | IN_USE | MAINTENANCE
   }));
+};
+/**
+ * Get ALL operators for admin management.
+ */
+export const getAllOperators = async () => {
+  console.log(`[AdminService] Fetching all operators for management...`);
+  const operators = await prisma.user.findMany({
+    where: { role: 'operator' },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      status: true,
+      createdAt: true,
+      availability: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return operators;
+};
+
+/**
+ * Create a new operator manually (Admin only).
+ */
+export const createOperator = async (operatorData) => {
+  const { name, email, password, phone } = operatorData;
+
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (existingUser) {
+    throw new Error('Operator with this email already exists');
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  return await prisma.user.create({
+    data: {
+      name,
+      email,
+      passwordHash,
+      phone,
+      role: 'operator',
+      status: 'active',
+      availability: 'available',
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      status: true,
+    },
+  });
+};
+
+/**
+ * Delete an operator profile.
+ */
+export const deleteOperator = async (id) => {
+  return await prisma.user.delete({
+    where: { id: parseInt(id) },
+  });
+};
+
+/**
+ * Tractor Management Services
+ */
+
+export const getAllTractors = async () => {
+  console.log(`[AdminService] Fetching all tractors...`);
+  const tractors = await prisma.tractor.findMany({
+    include: {
+      operator: { select: { id: true, name: true } }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  // Apply Maintenance Logic
+  return await Promise.all(tractors.map(async (t) => {
+    const hoursRemaining = t.nextServiceDueHours - t.engineHours;
+    let currentStatus = t.status;
+
+    // Auto-maintenance rule
+    if (hoursRemaining <= 50 && currentStatus !== 'MAINTENANCE') {
+      await prisma.tractor.update({
+        where: { id: t.id },
+        data: { status: 'MAINTENANCE' }
+      });
+      currentStatus = 'MAINTENANCE';
+    }
+
+    return { ...t, status: currentStatus, hoursRemaining };
+  }));
+};
+
+export const createTractor = async (data) => {
+  const { name, model, engineHours = 0, nextServiceDueHours = 250, lastServiceDate } = data;
+  return await prisma.tractor.create({
+    data: {
+      name,
+      model,
+      engineHours: parseFloat(engineHours),
+      nextServiceDueHours: parseFloat(nextServiceDueHours),
+      lastServiceDate: lastServiceDate ? new Date(lastServiceDate) : null,
+      status: 'AVAILABLE'
+    }
+  });
+};
+
+export const updateTractor = async (id, data) => {
+  const tId = parseInt(id);
+  const { name, model, status, operatorId, engineHours, nextServiceDueHours, lastServiceDate } = data;
+
+  const tractor = await prisma.tractor.findUnique({ where: { id: tId } });
+  if (!tractor) throw new Error('Tractor not found');
+
+  // Business Rule: Do NOT allow assigning tractor in Maintenance
+  if (operatorId && status === 'MAINTENANCE') {
+    throw new Error('Cannot assign a tractor that is in maintenance');
+  }
+
+  const updateData = { name, model, status };
+  
+  if (engineHours !== undefined) updateData.engineHours = parseFloat(engineHours);
+  if (nextServiceDueHours !== undefined) updateData.nextServiceDueHours = parseFloat(nextServiceDueHours);
+  if (lastServiceDate !== undefined) updateData.lastServiceDate = lastServiceDate ? new Date(lastServiceDate) : null;
+
+  if (operatorId !== undefined) {
+    if (operatorId === null) {
+      updateData.operatorId = null;
+    } else {
+      const opId = parseInt(operatorId);
+      // Validate operator
+      const operator = await prisma.user.findUnique({ where: { id: opId } });
+      if (!operator || operator.role !== 'operator') {
+        throw new Error('Invalid operator selected');
+      }
+
+      // Handle "Replace old tractor assignment"
+      // Since operatorId is unique in Tractor model, we must unlink the old tractor first.
+      await prisma.tractor.updateMany({
+        where: { operatorId: opId },
+        data: { operatorId: null }
+      });
+
+      updateData.operatorId = opId;
+    }
+  }
+
+  return await prisma.tractor.update({
+    where: { id: tId },
+    data: updateData,
+    include: {
+      operator: { select: { id: true, name: true } }
+    }
+  });
 };

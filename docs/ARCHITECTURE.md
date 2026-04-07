@@ -111,13 +111,16 @@ Rules:
 - **Manual Dispatch**: Assign resources to pending jobs.
 - **Transactional Settlement**: Create payment record + update status.
 - **Unified Ledger**: Aggregate payments and dues for revenue tracking.
+- **Operator Enrollment**: Secure creation and decommissioning of operator accounts.
 
 ### Operator Service
 - **Job Lifecycle**: Manage transitions (en_route → in_progress → completed).
 - **Resource Recovery**: Release tractor/operator on job completion.
+- **Profile Independence**: Managing personal contact data and interface settings.
 
 ### Booking & Pricing Service
 - Create booking and calculate estimated price.
+- **Historical Snapshots**: Capture and store current hub/service state in the `Booking` record at creation for consistent "Quote" views.
 
 ---
 
@@ -138,6 +141,11 @@ All business rules must be implemented in services.
 ### Database Access Rule
 - Prisma queries only inside services
 - Never in controllers or routes
+
+### Historical Consistency Rule (NEW)
+- Critical metadata like Hub Name, Hub Location, and Hub Coordinates must be "snapshotted" in the Booking record at creation time.
+- This ensures that old quotes remain accurate for audit and invoice purposes even if global settings (like hub address) change.
+- Never recalculate historical pricing or locations using current master data; always use the stored snapshots.
 
 ### Status Control Rule
 Booking status must follow strict order:

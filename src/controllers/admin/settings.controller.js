@@ -15,12 +15,23 @@ export const getSystemConfig = async (req, res) => {
 export const updateSystemConfig = async (req, res) => {
   try {
     const data = req.body;
-    const config = await settingsService.updateSystemConfig(data);
+    const adminId = req.user?.id; // Assuming user id is in req.user
+    const config = await settingsService.updateSystemConfig(data, adminId);
     return sendSuccess(res, config, "System configuration updated");
   } catch (error) {
     return sendError(res, error.message, 400);
   }
 };
+
+export const getFuelPriceLogs = async (req, res) => {
+  try {
+    const logs = await settingsService.getFuelPriceLogs();
+    return sendSuccess(res, logs, "Fuel price logs retrieved");
+  } catch (error) {
+    return sendError(res, error.message, 500);
+  }
+};
+
 
 // ─── ZONES ───────────────────────────────────────────────────────
 
@@ -35,20 +46,19 @@ export const listZones = async (req, res) => {
 
 export const createZone = async (req, res) => {
   try {
-    const { name, distance } = req.body;
-    const zone = await settingsService.createZone(name, distance);
+    const { minDistance, maxDistance, surchargePerHectare, status } = req.body;
+    const zone = await settingsService.createZone(minDistance, maxDistance, surchargePerHectare, status);
     return sendSuccess(res, zone, "Zone created successfully", 201);
   } catch (error) {
-    const statusCode = error.message.includes('already exists') ? 409 : 400;
-    return sendError(res, error.message, statusCode);
+    return sendError(res, error.message, 400);
   }
 };
 
 export const updateZone = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, distance } = req.body;
-    const zone = await settingsService.updateZone(id, name, distance);
+    const { minDistance, maxDistance, surchargePerHectare, status } = req.body;
+    const zone = await settingsService.updateZone(id, minDistance, maxDistance, surchargePerHectare, status);
     return sendSuccess(res, zone, "Zone updated successfully");
   } catch (error) {
     const statusCode = error.message.includes('not found') ? 404 : 400;
@@ -63,6 +73,38 @@ export const deleteZone = async (req, res) => {
     return sendSuccess(res, null, "Zone deleted successfully");
   } catch (error) {
     const statusCode = error.message.includes('not found') ? 404 : 500;
+    return sendError(res, error.message, statusCode);
+  }
+};
+
+// ─── SERVICES ────────────────────────────────────────────────────
+
+export const listServices = async (req, res) => {
+  try {
+    const services = await settingsService.listServices();
+    return sendSuccess(res, services, "Services retrieved successfully");
+  } catch (error) {
+    return sendError(res, error.message, 500);
+  }
+};
+
+export const updateServiceRates = async (req, res) => {
+  try {
+    const ratesMap = req.body;
+    const updatedServices = await settingsService.updateServiceRates(ratesMap);
+    return sendSuccess(res, updatedServices, "Service rates updated successfully");
+  } catch (error) {
+    return sendError(res, error.message, 400);
+  }
+};
+export const updateService = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { baseRatePerHectare, effectiveDate } = req.body;
+    const service = await settingsService.updateService(id, baseRatePerHectare, effectiveDate);
+    return sendSuccess(res, service, "Service updated successfully");
+  } catch (error) {
+    const statusCode = error.message.includes('not found') ? 404 : 400;
     return sendError(res, error.message, statusCode);
   }
 };

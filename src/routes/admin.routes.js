@@ -25,12 +25,25 @@ router.post('/settle-booking/:bookingId', adminController.settleBooking);
 
 // Dispatch feature
 router.get('/pending-dispatch', dispatchController.getPendingBookings);
+router.put('/schedule/:bookingId', dispatchController.scheduleBooking);
 router.get('/operators', dispatchController.getAvailableOperators);
 router.put('/assign/:bookingId', dispatchController.dispatchBooking);
 
 // Farmers Management
 router.get('/farmers', adminController.getFarmers);
 router.put('/farmers/:id/status', adminController.updateFarmerStatus);
+
+// Operator Management
+router.get('/operator-list', adminController.getOperators); // renamed to avoid conflict with dispatch
+router.post('/operators', adminController.createOperator);
+router.delete('/operators/:id', adminController.deleteOperator);
+
+/**
+ * Tractor Management
+ */
+router.get('/tractors', adminController.getTractors);
+router.post('/tractors', adminController.createTractor);
+router.put('/tractors/:id', adminController.updateTractor);
 
 // Reports & Analytics
 router.get('/reports/revenue', reportController.getRevenue);
@@ -41,12 +54,18 @@ router.get('/reports/farmers', reportController.getFarmers);
 // System Settings - Global Configuration
 router.get('/settings/config', settingsController.getSystemConfig);
 router.post('/settings/config', settingsController.updateSystemConfig);
+router.get('/settings/fuel-history', settingsController.getFuelPriceLogs);
 
 // System Settings - Distance Zones
 router.get('/settings/zones', settingsController.listZones);
 router.post('/settings/zones', settingsController.createZone);
 router.put('/settings/zones/:id', settingsController.updateZone);
 router.delete('/settings/zones/:id', settingsController.deleteZone);
+
+// System Settings - Services
+router.get('/services', settingsController.listServices);
+router.put('/services', settingsController.updateServiceRates);
+router.put('/services/:id', settingsController.updateService);
 
 export default router;
 

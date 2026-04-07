@@ -23,7 +23,7 @@ model User {
   bookings         Booking[] @relation("FarmerBookings")
   operatorBookings Booking[] @relation("OperatorBookings")
   fuelLogs         FuelLog[] @relation("OperatorFuelLogs")
-  tractors         Tractor[] @relation("OperatorTractors")
+  tractor          Tractor?  @relation("OperatorTractor")
 
   @@map("users")
 }
@@ -31,7 +31,9 @@ model User {
 model Service {
   id                 Int       @id @default(autoincrement())
   name               String    @unique
+  description        String?   @db.Text
   baseRatePerHectare Float     @map("base_rate_per_hectare")
+  effectiveDate      DateTime  @default(now()) @map("effective_date")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
   bookings           Booking[]
@@ -51,16 +53,22 @@ model SystemConfig {
   preAlertHours        Int      @default(50) @map("pre_alert_hours")
   serviceIntervalHours Int      @default(250) @map("service_interval_hours")
   supportEmail         String   @default("support@dummy.com") @map("support_email")
+  baseLatitude         Float?   @map("base_latitude")
+  baseLongitude        Float?   @map("base_longitude")
+  perKmRate            Float    @default(500) @map("per_km_rate")
+  pricingMode          String   @default("ZONE") @map("pricing_mode")
 
   @@map("system_config")
 }
 
 model Zone {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  distance  Float
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                  Int      @id @default(autoincrement())
+  minDistance         Float    @map("min_distance")
+  maxDistance         Float?   @map("max_distance")
+  surchargePerHectare Float    @map("surcharge_per_hectare")
+  status              String   @default("ACTIVE")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   @@map("zones")
 }
@@ -77,12 +85,23 @@ model Booking {
   fuelSurcharge  Float     @default(0) @map("fuel_surcharge")
   totalPrice     Float     @map("total_price")
   finalPrice     Float     @map("final_price")
+  farmerLatitude  Float?    @map("farmer_latitude")
+  farmerLongitude Float?    @map("farmer_longitude")
+  airDistance     Float     @default(0) @map("air_distance")
+  roadDistance    Float     @default(0) @map("road_distance")
   tractorId      Int?      @map("tractor_id")
   operatorId     Int?      @map("operator_id")
-  status         String    @default("scheduled")
+  status         String    @default("pending")
+  scheduledAt    DateTime? @map("scheduled_at")
+  paymentStatus  String    @default("pending") @map("payment_status")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
-  zoneName       String?   @map("zone_name")
+  zoneName            String?   @map("zone_name")
+  serviceNameSnapshot String?   @map("service_name_snapshot")
+  hubName             String?   @map("hub_name")
+  hubLocation         String?   @map("hub_location")
+  hubLatitude         Float?    @map("hub_latitude")
+  hubLongitude        Float?    @map("hub_longitude")
   farmer         User      @relation("FarmerBookings", fields: [farmerId], references: [id])
   operator       User?     @relation("OperatorBookings", fields: [operatorId], references: [id])
   service        Service   @relation(fields: [serviceId], references: [id])
@@ -111,17 +130,20 @@ model Payment {
 }
 
 model Tractor {
-  id          Int       @id @default(autoincrement())
-  modelName   String    @map("model_name")
-  plateNumber String    @unique @map("plate_number")
-  status      String    @default("available")
-  operatorId  Int       @map("operator_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  bookings    Booking[] @relation("TractorBookings")
-  operator    User      @relation("OperatorTractors", fields: [operatorId], references: [id])
+  id                  Int       @id @default(autoincrement())
+  name                String
+  model               String?
+  status              String    @default("AVAILABLE")
+  engineHours         Float     @default(0) @map("engine_hours")
+  lastServiceDate     DateTime? @map("last_service_date")
+  nextServiceDueHours Float     @default(250) @map("next_service_due_hours")
+  operatorId          Int?      @unique @map("operator_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  bookings            Booking[] @relation("TractorBookings")
+  fuelLogs            FuelLog[] @relation("TractorFuelLogs")
+  operator            User?     @relation("OperatorTractor", fields: [operatorId], references: [id])
 
-  @@index([operatorId], map: "tractors_operator_id_fkey")
   @@map("tractors")
 }
 
@@ -135,7 +157,20 @@ model FuelLog {
   receiptUrl String?  @map("receipt_url")
   createdAt  DateTime @default(now()) @map("created_at")
   operator   User     @relation("OperatorFuelLogs", fields: [operatorId], references: [id])
+  tractor    Tractor? @relation("TractorFuelLogs", fields: [tractorId], references: [id])
 
   @@index([operatorId], map: "fuel_logs_operator_id_fkey")
+  @@index([tractorId], map: "fuel_logs_tractor_id_fkey")
   @@map("fuel_logs")
 }
+
+model FuelPriceLog {
+  id        Int      @id @default(autoincrement())
+  oldPrice  Float    @map("old_price")
+  newPrice  Float    @map("new_price")
+  adminId   Int      @map("admin_id")
+  timestamp DateTime @default(now()) @map("timestamp")
+
+  @@map("fuel_price_logs")
+}
+

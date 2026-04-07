@@ -1,17 +1,19 @@
 import * as BookingService from '../../services/booking.service.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
-import { bookingCreateSchema } from '../../schema/booking.schema.js';
+import { bookingCreateSchema, pricePreviewSchema } from '../../schema/booking.schema.js';
 
 /**
  * Handle price preview request.
  */
 export const getPricePreview = async (req, res) => {
   try {
-    const validatedData = bookingCreateSchema.parse(req.body);
+    const validatedData = pricePreviewSchema.parse(req.body);
     const pricing = await BookingService.calculateBookingPrice(
       validatedData.serviceType,
       validatedData.landSize,
-      validatedData.zoneId
+      validatedData.zoneId,
+      validatedData.farmerLatitude,
+      validatedData.farmerLongitude
     );
     return sendSuccess(res, {
       basePrice: pricing.basePrice,
@@ -19,7 +21,9 @@ export const getPricePreview = async (req, res) => {
       distanceCharge: pricing.distanceCharge,
       fuelSurcharge: pricing.fuelSurcharge,
       totalPrice: pricing.totalPrice,
-      zoneName: pricing.zoneName
+      zoneName: pricing.zoneName,
+      airDistance: pricing.airDistance,
+      roadDistance: pricing.roadDistance
     }, "Price preview calculated");
   } catch (error) {
     if (error.name === 'ZodError') {

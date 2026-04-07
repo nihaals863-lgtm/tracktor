@@ -153,6 +153,11 @@ To avoid breaking the system:
 - **Financial Integrity**: UI statuses must be derived from actual ledger entry metrics (`paidAmount` vs `totalPrice`) rather than just the string status.
 - **Farmer Management Rule**: Admin-created farmers MUST be issued a temporary password that is displayed exactly once.
 - **Access Control**: Users with `status: inactive` MUST be blocked from authentication.
+- **Registration Restriction**: Public registration MUST only permit the `farmer` role. 
+- **Operator Lifecycle**: Operators MUST be created by an Admin and cannot self-register.
+- **Profile Integrity**: Operator profile updates MUST validate email uniqueness and maintain the `operator` role.
+- **Historical Integrity**: Do NOT recalculate prices or locations for existing bookings using current configuration; always use the snapshot fields (`hubName`, `hubLocation`, etc.).
+- **Service Rate Flexibility**: Do NOT restrict `effectiveDate` to future dates; allow past and present dates for adjustment and manual entry.
 
 
 ---

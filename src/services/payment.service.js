@@ -10,7 +10,7 @@ export const getFarmerPendingBookings = async (farmerId) => {
   const bookings = await prisma.booking.findMany({
     where: {
       farmerId: parseInt(farmerId),
-      status: { not: 'paid' } // All bookings except already paid ones
+      paymentStatus: { not: 'PAID' } // All bookings except already paid ones
     },
     include: {
       service: { select: { name: true } },
@@ -27,10 +27,13 @@ export const getFarmerPendingBookings = async (farmerId) => {
     
     console.log(`[PaymentService] Booking ID: ${booking.id} | Total: ${booking.finalPrice} | Paid: ${totalPaid} | Remaining: ${remainingAmount}`);
 
+    // Map DB status 'PAID', 'PARTIAL', 'PENDING' to frontend expected 'full', 'partial', 'pending'
     let paymentStatus = 'pending';
-    if (totalPaid > 0) {
-      paymentStatus = remainingAmount <= 0 ? 'full' : 'partial';
-    }
+    if (booking.paymentStatus === 'PAID') paymentStatus = 'full';
+    else if (booking.paymentStatus === 'PARTIAL') paymentStatus = 'partial';
+    
+    // Fallback recalculation if it's somehow out of sync
+    if (totalPaid > 0 && remainingAmount <= 0) paymentStatus = 'full';
 
     return {
       id: booking.id,
@@ -89,10 +92,10 @@ export const processBookingPayment = async (farmerId, { bookingId, amount, metho
     // 2. Check if this payment completes the booking (total_paid >= total_price)
     const newPaidAmount = paidAmount + amount;
     if (newPaidAmount >= booking.finalPrice) {
-      console.log(`[PaymentService] Booking ${booking.id} fully paid. Updating status to 'paid'.`);
+      console.log(`[PaymentService] Booking ${booking.id} fully paid. Updating status to 'paid' and paymentStatus to 'PAID'.`);
       await tx.booking.update({
         where: { id: booking.id },
-        data: { status: 'paid' }
+        data: { status: 'paid', paymentStatus: 'PAID' }
       });
     }
 
@@ -125,7 +128,7 @@ export const settleAllDues = async (farmerId) => {
 
       await tx.booking.update({
         where: { id: due.id },
-        data: { status: 'paid' }
+        data: { status: 'paid', paymentStatus: 'PAID' }
       });
     }
 

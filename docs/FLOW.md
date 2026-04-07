@@ -6,12 +6,15 @@
 
 A booking must follow this strict sequence. Status transitions cannot be skipped.
 
-1. Scheduled (Farmer creates booking)
-2. Dispatched (Admin assigns tractor and operator)
-3. En Route (Operator starts journey)
-4. In Progress (Operator starts work)
-5. Completed (Operator finishes work)
-6. Paid (Payment confirmed)
+1. Pending (Farmer creates a booking request + System snapshots hub/service metadata)
+   - *Optional*: Farmer selects payment intent (Full/Partial/Later)
+   - *Result*: Initial Payment record created if Full/Partial chosen.
+2. Scheduled (Admin sets official deployment Date & Time)
+3. Dispatched (aka ASSIGNED) (Admin assigns tractor and operator)
+4. En Route (Operator starts journey)
+5. In Progress (Operator starts work)
+6. Completed (Operator finishes work)
+7. Paid (Payment confirmed)
 
 ---
 
@@ -19,7 +22,8 @@ A booking must follow this strict sequence. Status transitions cannot be skipped
 
 | Current Status | Next Allowed Status | Action | Actor |
 |----------------|-------------------|--------|-------|
-| None | Scheduled | Create Booking | Farmer |
+| None | Pending | Create Booking | Farmer |
+| Pending | Scheduled | Approve & Schedule | Admin |
 | Scheduled | Dispatched / Cancelled | Assign Resources | Admin |
 | Dispatched | En Route | Start Journey | Operator |
 | En Route | In Progress | Start Work | Operator |
@@ -58,6 +62,7 @@ A booking must follow this strict sequence. Status transitions cannot be skipped
 
 ### 3.4 Pricing & Settlement
 - Price at `Scheduled` is an estimate.
+- **Data Snapshot**: During booking creation (`Scheduled`), the system snapshots the current Hub Name, Location, Coordinates, and Service Name to the `Booking` record.
 - Settlement is triggered by **Admin Only** in Phase 1.
 - Marking as "Paid" creates a physical ledger entry (`admin_settlement`).
 
@@ -122,7 +127,28 @@ function validateActor(role, nextStatus) {
 
 ---
 
-## 6. Summary
+## 6. User Registration & Lifecycle
+
+To ensure security and fleet integrity, user account creation is strictly controlled:
+
+### 6.1 Public Registration (Farmer)
+- **Actor**: Any potential user.
+- **Role**: Limited to `farmer`.
+- **Enforcement**: Role field is hardcoded/restricted in the public registration form.
+
+### 6.2 Admin-Controlled Enrollment (Operator/Admin)
+- **Actor**: Existing Admin.
+- **Role**: `operator` or `admin`.
+- **Enforcement**: Created through the Admin Management Portal. Operators cannot self-register.
+
+### 6.3 Profile Management
+- **Farmers**: Can update name and location.
+- **Operators**: Can update name, email, and phone.
+- **Security**: Password changes require providing the `oldPassword` for verification.
+
+---
+
+## 7. Summary
 
 This flow ensures:
 
@@ -130,5 +156,6 @@ This flow ensures:
 - No invalid transitions
 - Proper resource management
 - Clear role-based actions
+- Controlled user onboarding
 
 This is critical for maintaining system consistency and operational reliability.
